@@ -164,6 +164,48 @@ float s2u(float s)
 	return 0.0f;
 }
 
+float get_u(float t, float tmax)
+{
+	float tNorm, sNorm, s, u;
+	switch (interpolation_type)
+	{
+	case 0:
+		u = std::fmod(t, umax);
+		break;
+	case 1:
+		tNorm = std::fmod(t, tmax) / tmax;
+		s = smax * tNorm;
+		u = s2u(s);
+		break;
+	case 2:
+		tNorm = std::fmod(t, tmax) / tmax;
+		sNorm = -2 * pow(tNorm, 3) + 3 * pow(tNorm, 2);
+		s = smax * sNorm;
+		u = s2u(s);
+		break;
+	case 3:
+		// two derivatives, two points
+		tNorm = std::fmod(t, tmax) / tmax;
+		float t1, t2, t3, t4;
+		t1 = 1 / 3.0f;
+		t2 = 1 / 3.0f;
+		t3 = 1.0f;
+		t4 = 1.0f;
+		glm::mat4 A;
+		A[0] = glm::vec4(pow(t1, 3), 3 * pow(t2, 2), pow(t3, 3), 3 * pow(t4, 2));
+		A[1] = glm::vec4(pow(t1, 2), 2 * t2, pow(t3, 2), 2 * t4);
+		A[2] = glm::vec4(t1, 1, t3, 1);
+		A[3] = glm::vec4(1, 0, 1, 0);
+		glm::vec4 b(-2, 0, 2, 0);
+		glm::vec4 x = glm::inverse(A) * b;
+		sNorm = x[0] * pow(tNorm, 3) + x[1] * pow(tNorm, 2) + x[2] * tNorm + x[3];
+		s = smax * sNorm;
+		u = s2u(s);
+		break;
+	}
+	return u;
+}
+
 void render()
 {
 	// Update time.
@@ -200,7 +242,6 @@ void render()
 	MV->pushMatrix();
 	if (keyPresses[(unsigned)' '] % 2)
 	{
-		MV->pushMatrix();
 		auto ms = make_shared<MatrixStack>();
 		ms->pushMatrix();
 		ms->translate(heli->getPosition());
@@ -215,44 +256,8 @@ void render()
 	}
 
 	// choose interpolation function
-	float tNorm, sNorm, s, u;
 	float tmax = 10.0f;
-	switch (interpolation_type)
-	{
-	case 0:
-		u = std::fmod(t, umax);
-		break;
-	case 1:
-		tNorm = std::fmod(t, tmax) / tmax;
-		s = smax * tNorm;
-		u = s2u(s);
-		break;
-	case 2:
-		tNorm = std::fmod(t, tmax) / tmax;
-		sNorm = -2 * pow(tNorm, 3) + 3 * pow(tNorm, 2);
-		s = smax * sNorm;
-		u = s2u(s);
-		break;
-	case 3:
-		// two derivatives, two points
-		tNorm = std::fmod(t, tmax) / tmax;
-		float t1, t2, t3, t4;
-		t1 = 1/3.0f;
-		t2 = 1/3.0f;
-		t3 = 1.0f;
-		t4 = 1.0f;
-		glm::mat4 A;
-		A[0] = glm::vec4(pow(t1, 3), 3 * pow(t2, 2), pow(t3, 3), 3 * pow(t4, 2));
-		A[1] = glm::vec4(pow(t1, 2), 2 * t2, pow(t3, 2), 2 * t4);
-		A[2] = glm::vec4(t1, 1, t3, 1);
-		A[3] = glm::vec4(1, 0, 1, 0);
-		glm::vec4 b(-2, 0, 2, 0);
-		glm::vec4 x = glm::inverse(A) * b;
-		sNorm = x[0] * pow(tNorm, 3) + x[1] * pow(tNorm, 2) + x[2] * tNorm + x[3];
-		s = smax * sNorm;
-		u = s2u(s);
-		break;
-	}
+	float u = get_u(t, tmax);
 	heli->setPosition(path->getCurrentPosition(u));
 	heli->setRotation(path->getCurrentRotation(u));
 

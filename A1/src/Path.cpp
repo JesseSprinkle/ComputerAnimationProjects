@@ -118,7 +118,6 @@ glm::quat Path::getCurrentRotation(float u)
 		}
 
 		// uhh instructions say to do some weird stuff, I'm just going to do what seems intuitive to me
-		// I think I designed mine completely differently than we were expected to
 		return glm::normalize((1 - u) * q0 + u * q1);
 	}
 	return glm::angleAxis(0.0f, glm::vec3(1, 0, 0));
