@@ -1,5 +1,3 @@
-#ifndef HELI_H
-#define HELI_H
 #include "Helicopter.h"
 
 Helicopter::Helicopter(std::shared_ptr<Shape> _body1, std::shared_ptr<Shape> _body2, std::shared_ptr<Shape> _prop1, std::shared_ptr<Shape> _prop2)
@@ -15,14 +13,26 @@ void Helicopter::setPosition(glm::vec3 _position)
 {
 	position = _position;
 }
+
+void Helicopter::setRotation(glm::quat _rotation)
+{
+	rotation = _rotation;
+}
+
 glm::vec3 Helicopter::getPosition()
 {
 	return position;
 }
+glm::quat Helicopter::getRotation()
+{
+	return rotation;
+}
+
 void Helicopter::draw(std::shared_ptr<MatrixStack> MV, float t, std::shared_ptr<Program> prog)
 {
 	MV->pushMatrix();
 	MV->translate(position);
+	MV->multMatrix(glm::mat4_cast(rotation));
 	glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	glUniform3f(prog->getUniform("kd"), 1.0f, 0.0f, 0.0f);
 	body1->draw(prog);
@@ -45,4 +55,3 @@ void Helicopter::draw(std::shared_ptr<MatrixStack> MV, float t, std::shared_ptr<
 	MV->popMatrix();
 	MV->popMatrix();	
 }
-#endif

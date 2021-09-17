@@ -16,6 +16,8 @@
 #include "MatrixStack.h"
 #include "Shape.h"
 #include "Helicopter.h"
+#include "Path.h"
+#include "Keyframe.h"
 
 using namespace std;
 
@@ -27,6 +29,10 @@ int keyPresses[256] = {0}; // only for English keyboards!
 shared_ptr<Program> prog;
 shared_ptr<Camera> camera;
 shared_ptr<Helicopter> heli;
+shared_ptr<Path> path;
+vector<pair<float, float>> usTable;
+float smax, umax;
+int interpolation_type = 0;
 
 static void error_callback(int error, const char *description)
 {
@@ -37,6 +43,11 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 {
 	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, GL_TRUE);
+	}
+
+	if (key == GLFW_KEY_S && action == GLFW_PRESS)
+	{
+		interpolation_type = (interpolation_type + 1) % 4;
 	}
 }
 
@@ -114,7 +125,18 @@ static void init()
 	prop2->init();
 
 	heli = make_shared<Helicopter>(body1, body2, prop1, prop2);
-	
+	auto path_heli = make_shared<Helicopter>(body1, body2, prop1, prop2);
+	path = make_shared<Path>(std::vector<Keyframe>(), path_heli);
+	path->addKeyframe(Keyframe(glm::vec3(0, 0, 0), glm::angleAxis(0.0f, glm::vec3(1, 0, 0))));
+	path->addKeyframe(Keyframe(glm::vec3(-2, 0, 0) * 1.5f, glm::angleAxis(3.14f, glm::normalize(glm::vec3(1, 1, 0)))));
+	path->addKeyframe(Keyframe(glm::vec3(-2.5, .4, 1) * 1.5f, glm::angleAxis(3.14f, glm::normalize(glm::vec3(0, 1, 0)))));
+	path->addKeyframe(Keyframe(glm::vec3(-2, 2, 2.3) * 1.5f, glm::angleAxis(3.14f, glm::normalize(glm::vec3(0, 0, 1)))));
+	path->addKeyframe(Keyframe(glm::vec3(1.0, 1, 1) * 1.5f, glm::angleAxis(3.14f, glm::normalize(glm::vec3(1, 1, 1)))));
+	path->addKeyframe(Keyframe(glm::vec3(0, 0, 0), glm::angleAxis(0.0f, glm::normalize(glm::vec3(1, 0, 0)))));
+
+	usTable = path->createParameterizationTable();
+	smax = usTable[usTable.size() - 1].second;
+	umax = usTable[usTable.size() - 1].first;
 	// Initialize time.
 	glfwSetTime(0.0);
 	
@@ -122,6 +144,24 @@ static void init()
 	// You can intersperse this line in your code to find the exact location
 	// of your OpenGL error.
 	GLSL::checkError(GET_FILE_LINE);
+}
+
+float s2u(float s)
+{
+	s = fmod(s, smax);
+	if (s < 0)
+	{
+		s = smax + s;
+	}
+	for (int i = 1; i < usTable.size(); i++)
+	{
+		if (usTable[i - 1].second <= s && usTable[i].second >= s)
+		{
+			float a = (s - usTable[i - 1].second) / (usTable[i].second - usTable[i - 1].second);
+			return (1 - a) * usTable[i - 1].first + a * usTable[i].first;
+		}
+	}
+	return 0.0f;
 }
 
 void render()
@@ -158,12 +198,71 @@ void render()
 	P->pushMatrix();
 	camera->applyProjectionMatrix(P);
 	MV->pushMatrix();
-	camera->applyViewMatrix(MV);
-	
+	if (keyPresses[(unsigned)' '] % 2)
+	{
+		MV->pushMatrix();
+		auto ms = make_shared<MatrixStack>();
+		ms->pushMatrix();
+		ms->translate(heli->getPosition());
+		ms->multMatrix(glm::mat4_cast(heli->getRotation()));
+		ms->rotate(3.1416/2, glm::vec3(0, 1, 0)); // for some reason the camera is looking at the side of the helicopter, so we rotate
+		ms->translate(glm::vec3(0, 0, 4));
+		MV->multMatrix(glm::inverse(ms->topMatrix()));
+	}
+	else
+	{
+		camera->applyViewMatrix(MV);
+	}
+
+	// choose interpolation function
+	float tNorm, sNorm, s, u;
+	float tmax = 10.0f;
+	switch (interpolation_type)
+	{
+	case 0:
+		u = std::fmod(t, umax);
+		break;
+	case 1:
+		tNorm = std::fmod(t, tmax) / tmax;
+		s = smax * tNorm;
+		u = s2u(s);
+		break;
+	case 2:
+		tNorm = std::fmod(t, tmax) / tmax;
+		sNorm = -2 * pow(tNorm, 3) + 3 * pow(tNorm, 2);
+		s = smax * sNorm;
+		u = s2u(s);
+		break;
+	case 3:
+		// two derivatives, two points
+		tNorm = std::fmod(t, tmax) / tmax;
+		float t1, t2, t3, t4;
+		t1 = 1/3.0f;
+		t2 = 1/3.0f;
+		t3 = 1.0f;
+		t4 = 1.0f;
+		glm::mat4 A;
+		A[0] = glm::vec4(pow(t1, 3), 3 * pow(t2, 2), pow(t3, 3), 3 * pow(t4, 2));
+		A[1] = glm::vec4(pow(t1, 2), 2 * t2, pow(t3, 2), 2 * t4);
+		A[2] = glm::vec4(t1, 1, t3, 1);
+		A[3] = glm::vec4(1, 0, 1, 0);
+		glm::vec4 b(-2, 0, 2, 0);
+		glm::vec4 x = glm::inverse(A) * b;
+		sNorm = x[0] * pow(tNorm, 3) + x[1] * pow(tNorm, 2) + x[2] * tNorm + x[3];
+		s = smax * sNorm;
+		u = s2u(s);
+		break;
+	}
+	heli->setPosition(path->getCurrentPosition(u));
+	heli->setRotation(path->getCurrentRotation(u));
+
 	prog->bind();
 	glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
 	glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-	heli->setPosition(glm::vec3(1, 1, 1));
+	if (keyPresses[(unsigned)'k'] % 2)
+	{
+		path->drawHelis(MV, t, prog);
+	}
 	heli->draw(MV, t, prog);
 	prog->unbind();
 	
@@ -179,6 +278,12 @@ void render()
 	glPushMatrix();
 	glLoadMatrixf(glm::value_ptr(MV->topMatrix()));
 	
+	// Draw path
+	if (keyPresses[(unsigned)'k'] % 2)
+	{
+		path->drawCurve();
+	}
+
 	// Draw frame
 	glLineWidth(2);
 	glBegin(GL_LINES);

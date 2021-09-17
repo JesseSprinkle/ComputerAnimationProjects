@@ -1,0 +1,7 @@
+JESSE SPRINKLE
+tmax=10.0
+My function is a cubic function that I solved using two points: each one setting the position of a min/max.
+The linear systems solves to -27x^3+54x^2-27x+2. From the graph of the function, you can see it shoots backward 4 loops quickly, then over the next 2/3 second it winds forward to it's initial position to repeat itself again.
+
+BONUS: Gaussian Curvature (see createParameterizationTable() function in Path.cpp)
+BONUS: Camera follows Helicopter
