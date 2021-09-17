@@ -232,6 +232,13 @@ void render()
 	} else {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	}
+
+
+	// choose interpolation function
+	float tmax = 10.0f;
+	float u = get_u(t, tmax);
+	heli->setPosition(path->getCurrentPosition(u));
+	heli->setRotation(path->getCurrentRotation(u));
 	
 	auto P = make_shared<MatrixStack>();
 	auto MV = make_shared<MatrixStack>();
@@ -255,11 +262,6 @@ void render()
 		camera->applyViewMatrix(MV);
 	}
 
-	// choose interpolation function
-	float tmax = 10.0f;
-	float u = get_u(t, tmax);
-	heli->setPosition(path->getCurrentPosition(u));
-	heli->setRotation(path->getCurrentRotation(u));
 
 	prog->bind();
 	glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
