@@ -11,7 +11,6 @@ Bones::Bones(string filename)
 		cout << "Cannot read " << filename << endl;
 		return;
 	}
-	cout << "Loading " << filename << endl;
 
 	string line = getNextValidLine(in);
 	stringstream ss(line);
@@ -22,6 +21,7 @@ Bones::Bones(string filename)
 	ss = stringstream(line);
 	tPose = processLine(ss, boneCount);
 
+	// read bone frames
 	for (int i = 0; i < frameCount; ++i)
 	{
 		line = getNextValidLine(in);
@@ -29,6 +29,7 @@ Bones::Bones(string filename)
 		bones.push_back(processLine(ss, boneCount));
 	}
 
+	// create inverse tpose and multiplied matrices in constructor, store for later. more efficient
 	itPose = make_shared<vector<glm::mat4>>(boneCount);
 	for (int i = 0; i < boneCount; ++i)
 	{
@@ -49,6 +50,7 @@ Bones::Bones(string filename)
 	in.close();
 }
 
+// from a string, reads and stores all the bone matrices in a vector
 std::shared_ptr<std::vector<glm::mat4>> processLine(stringstream& ss, int boneCount)
 {
 	shared_ptr<vector<glm::mat4>> v = make_shared<vector<glm::mat4>>(boneCount);
@@ -83,20 +85,10 @@ std::shared_ptr<std::vector<glm::mat4>> Bones::getITPose()
 
 shared_ptr<vector<glm::mat4>> Bones::getBonesAtFrame(int frame)
 {
-	if (frame >= bones.size())
-	{
-		std::cout << "Error: Requested bones at frame " << frame << " when only " << bones.size() << " frames defined." << std::endl;
-		abort();
-	}
 	return bones[frame];
 }
 
 shared_ptr<vector<glm::mat4>> Bones::getAnimationMatricesAtFrame(int frame)
 {
-	if (frame >= animationMatrices.size())
-	{
-		std::cout << "Error: Requested bones at frame " << frame << " when only " << animationMatrices.size() << " frames defined." << std::endl;
-		abort();
-	}
 	return animationMatrices[frame];
 }

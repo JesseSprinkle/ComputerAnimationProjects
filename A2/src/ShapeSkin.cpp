@@ -78,27 +78,30 @@ void ShapeSkin::loadMesh(const string &meshName)
 
 void ShapeSkin::loadAttachment(const std::string &filename)
 {
-
 	ifstream in;
 	in.open(filename);
 	if (!in.good()) {
 		cout << "Cannot read " << filename << endl;
 		return;
 	}
-	cout << "Loading " << filename << endl;
 
+	// read base pose
 	string line = getNextValidLine(in);
 	stringstream ss(line);
 	int vertCount, boneCount, maxWeights;
 	ss >> vertCount >> boneCount >> maxWeights;
 
+	// set maxWeights so we can send data to gpu easier, define vectors of data
+	maxWeights = 12;
 	boneIndices = vector<int>(vertCount * maxWeights);
 	skinningWeights = vector<float>(vertCount * maxWeights);
 	nInfluences = vector<int>(vertCount);
 	for (int i = 0; i < vertCount; ++i)
 	{
+		// for each vertice, read in the weights that affect it
 		line = getNextValidLine(in);
 		ss = stringstream(line);
+
 		int nWeights;
 		ss >> nWeights;
 		nInfluences[i] = nWeights;
@@ -120,6 +123,16 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 	in.close();
 }
 
+// if we switch from cpu to gpu, we need to load the initial positions into the gpu.
+// if we dont, we will have cpu calculated points in the gpu
+void ShapeSkin::reloadVertices()
+{
+	glBindBuffer(GL_ARRAY_BUFFER, posBufID);
+	glBufferData(GL_ARRAY_BUFFER, posBuf.size() * sizeof(float), &posBuf[0], GL_DYNAMIC_DRAW);
+
+	glBindBuffer(GL_ARRAY_BUFFER, norBufID);
+	glBufferData(GL_ARRAY_BUFFER, norBuf.size() * sizeof(float), &norBuf[0], GL_DYNAMIC_DRAW);
+}
 
 void ShapeSkin::bindBones(shared_ptr<Bones> _bones)
 {
@@ -142,6 +155,21 @@ void ShapeSkin::init()
 	glGenBuffers(1, &texBufID);
 	glBindBuffer(GL_ARRAY_BUFFER, texBufID);
 	glBufferData(GL_ARRAY_BUFFER, texBuf.size()*sizeof(float), &texBuf[0], GL_STATIC_DRAW);
+
+	// Send weight data
+	glGenBuffers(1, &weightID);
+	glBindBuffer(GL_ARRAY_BUFFER, weightID);
+	glBufferData(GL_ARRAY_BUFFER, skinningWeights.size() * sizeof(float), &skinningWeights[0], GL_STATIC_DRAW);
+
+	// Send bone data
+	glGenBuffers(1, &bonesID);
+	glBindBuffer(GL_ARRAY_BUFFER, bonesID);
+	glBufferData(GL_ARRAY_BUFFER, boneIndices.size() * sizeof(int), &boneIndices[0], GL_STATIC_DRAW);
+
+	// Send number of weights
+	glGenBuffers(1, &inflID);
+	glBindBuffer(GL_ARRAY_BUFFER, inflID);
+	glBufferData(GL_ARRAY_BUFFER, nInfluences.size() * sizeof(int), &nInfluences[0], GL_STATIC_DRAW);
 	
 	// Send the element array to the GPU
 	glGenBuffers(1, &elemBufID);
@@ -157,20 +185,24 @@ void ShapeSkin::init()
 
 void ShapeSkin::update(int k)
 {
+	// create new position and normal buffer
 	vector<float> posBuf2(posBuf.size());
 	vector<float> norBuf2(norBuf.size());
 
+	// for each vertex, calculate the new position
 	unsigned int numVerts = posBuf.size() / 3;
 	unsigned int maxWeights = boneIndices.size() / numVerts;
 	shared_ptr<vector<glm::mat4>> animMats = bones->getAnimationMatricesAtFrame(k);
 	for (int i = 0; i < numVerts; ++i)
 	{
+		// start with init pos and result, sum w * A * x
 		glm::vec4 initPos = glm::vec4(posBuf[i * 3], posBuf[i * 3 + 1], posBuf[i * 3 + 2], 1.0f);
 		glm::vec4 initNor = glm::vec4(norBuf[i * 3], norBuf[i * 3 + 1], norBuf[i * 3 + 2], 0.0f);
 		glm::vec4 resultPos(0);
 		glm::vec4 resultNor(0);
 		for (int j = i * maxWeights; j < (i + 1) * maxWeights; ++j)
 		{
+			// for efficiency, if we are greater than the number of points that influence this point, stop adding 0s
 			if (j - (i * maxWeights) >= nInfluences[i])
 			{
 				break;
@@ -178,6 +210,7 @@ void ShapeSkin::update(int k)
 			resultPos += skinningWeights[j] * (animMats->operator[](boneIndices[j]) * initPos);
 			resultNor += skinningWeights[j] * (animMats->operator[](boneIndices[j]) * initNor);
 		}
+		// set new position for vertex, dir for norm
 		posBuf2[i * 3] = resultPos.x;
 		posBuf2[i * 3 + 1] = resultPos.y;
 		posBuf2[i * 3 + 2] = resultPos.z;
@@ -185,6 +218,8 @@ void ShapeSkin::update(int k)
 		norBuf2[i * 3 + 1] = resultNor.y;
 		norBuf2[i * 3 + 2] = resultNor.z;
 	}
+
+	// send updated data to gpu
 	glBindBuffer(GL_ARRAY_BUFFER, posBufID);
 	glBufferData(GL_ARRAY_BUFFER, posBuf2.size() * sizeof(float), &posBuf2[0], GL_DYNAMIC_DRAW);
 
@@ -216,22 +251,42 @@ void ShapeSkin::draw(int k) const
 	glBindBuffer(GL_ARRAY_BUFFER, texBufID);
 	glVertexAttribPointer(h_tex, 2, GL_FLOAT, GL_FALSE, 0, (const void *)0);
 	
-	/*
+	// if we should send weight data to gpu
 	if (sendWeightData)
 	{
-		progSkinGpu->addAttribute("w1");
-		progSkinGpu->addAttribute("w2");
-		progSkinGpu->addAttribute("b0");
-		progSkinGpu->addAttribute("b1");
-		progSkinGpu->addAttribute("b2");
-		progSkinGpu->addAttribute("numInfl");
-		int h_tex = prog->getAttribute("w0");
-		glEnableVertexAttribArray(h_tex);
-		glBindBuffer(GL_ARRAY_BUFFER, texBufID);
-		glVertexAttribPointer(h_tex, 2, GL_FLOAT, GL_FALSE, 0, (const void*)0);
-	}
-	*/
+		int w0 = prog->getAttribute("w0");
+		int w1 = prog->getAttribute("w1");
+		int w2 = prog->getAttribute("w2");
+		int b0 = prog->getAttribute("b0");
+		int b1 = prog->getAttribute("b1");
+		int b2 = prog->getAttribute("b2");
+		int nInfl = prog->getAttribute("numInfl");
+		unsigned stride = 12 * sizeof(float);
 
+		// send weights
+		glEnableVertexAttribArray(w0);
+		glEnableVertexAttribArray(w1);
+		glEnableVertexAttribArray(w2);
+		glBindBuffer(GL_ARRAY_BUFFER, weightID);
+		glVertexAttribPointer(w0, 4, GL_FLOAT, GL_FALSE, stride, (const void*)(0 * sizeof(float)));
+		glVertexAttribPointer(w1, 4, GL_FLOAT, GL_FALSE, stride, (const void*)(4 * sizeof(float)));
+		glVertexAttribPointer(w2, 4, GL_FLOAT, GL_FALSE, stride, (const void*)(8 * sizeof(float)));
+
+		// send bone indices
+		glEnableVertexAttribArray(b0);
+		glEnableVertexAttribArray(b1);
+		glEnableVertexAttribArray(b2);
+		glBindBuffer(GL_ARRAY_BUFFER, bonesID);
+		glVertexAttribPointer(b0, 4, GL_INT, GL_FALSE, stride, (const void*)(0 * sizeof(int)));
+		glVertexAttribPointer(b1, 4, GL_INT, GL_FALSE, stride, (const void*)(4 * sizeof(int)));
+		glVertexAttribPointer(b2, 4, GL_INT, GL_FALSE, stride, (const void*)(8 * sizeof(int)));
+
+		// send count of weights
+		glEnableVertexAttribArray(nInfl);
+		glBindBuffer(GL_ARRAY_BUFFER, inflID);
+		glVertexAttribPointer(nInfl, 1, GL_INT, GL_FALSE, 0, (const void*)(0 * sizeof(float)));
+	}
+	
 	// Draw
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elemBufID);
 	glDrawElements(GL_TRIANGLES, (int)elemBuf.size(), GL_UNSIGNED_INT, (const void *)0);

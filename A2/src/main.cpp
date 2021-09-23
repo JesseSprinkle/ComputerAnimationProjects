@@ -45,8 +45,10 @@ vector< shared_ptr<ShapeSkin> > shapes;
 map< string, shared_ptr<Texture> > textureMap;
 shared_ptr<Program> progSimple = NULL;
 shared_ptr<Program> progSkin = NULL;
-//shared_ptr<Program> progSkinGpu = NULL;
+shared_ptr<Program> progSkinGpu = NULL;
 shared_ptr<Bones> bones = NULL;
+double aggDrawTime = 0.0;
+int framesMeasured = 0;
 double t, t0;
 
 static void error_callback(int error, const char *description)
@@ -65,6 +67,16 @@ static void char_callback(GLFWwindow *window, unsigned int key)
 {
 	keyToggles[key] = !keyToggles[key];
 	switch(key) {
+	case 'g':
+		aggDrawTime = 0.0;
+		framesMeasured = 0;
+		if (!keyToggles['g'])
+		{
+			// need to load the initial points into gpu if we turn on gpu animating
+			for (const auto& shape : shapes) {
+				shape->reloadVertices();
+			}
+		}
 	}
 
 	for(const auto &shape : shapes) {
@@ -125,11 +137,9 @@ void init()
 	progSkin->setVerbose(true);
 
 	// For skinned shape, GPU
-	/*
 	progSkinGpu = make_shared<Program>();
 	progSkinGpu->setShaderNames(RESOURCE_DIR + "skin_vert_gpu.glsl", RESOURCE_DIR + "skin_frag.glsl");
 	progSkinGpu->setVerbose(true);
-	*/
 	
 	// Set background color
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -159,7 +169,6 @@ void init()
 	progSkin->addUniform("kdTex");
 	progSkin->addUniform("T");
 
-	/*
 	progSkinGpu->init();
 	progSkinGpu->addAttribute("aPos");
 	progSkinGpu->addAttribute("aNor");
@@ -179,7 +188,6 @@ void init()
 	progSkinGpu->addUniform("s");
 	progSkinGpu->addUniform("kdTex");
 	progSkinGpu->addUniform("T");
-	*/
 	
 	// Bind the texture to unit 1.
 	int unit = 1;
@@ -195,8 +203,6 @@ void init()
 		textureKd->setUnit(unit); // Bind to unit 1
 		textureKd->setWrapModes(GL_REPEAT, GL_REPEAT);
 	}
-
-
 
 	// Initialize time.
 	glfwSetTime(0.0);
@@ -306,31 +312,32 @@ void render()
 	
 
 	// Draw character
-	// calculate on cpu
-	for (const auto& shape : shapes) {
-		MV->pushMatrix();
-		// Draw skin
-		progSkin->bind();
-		textureMap[shape->getTextureFilename()]->bind(progSkin->getUniform("kdTex"));
-		glLineWidth(1.0f); // for wireframe
-		glUniformMatrix4fv(progSkin->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-		glUniformMatrix4fv(progSkin->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-		glUniform3f(progSkin->getUniform("ka"), 0.1f, 0.1f, 0.1f);
-		glUniform3f(progSkin->getUniform("ks"), 0.1f, 0.1f, 0.1f);
-		glUniform1f(progSkin->getUniform("s"), 200.0f);
-		shape->setProgram(progSkin, false);
-		shape->update(frame);
-		shape->draw(frame);
-		progSkin->unbind();
+	double it = glfwGetTime();
+	if (keyToggles[(unsigned int)'g'])
+	{
+		// calculate on cpu
+		for (const auto& shape : shapes) {
+			MV->pushMatrix();
+			// Draw skin
+			progSkin->bind();
+			textureMap[shape->getTextureFilename()]->bind(progSkin->getUniform("kdTex"));
+			glLineWidth(1.0f); // for wireframe
+			glUniformMatrix4fv(progSkin->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+			glUniformMatrix4fv(progSkin->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+			glUniform3f(progSkin->getUniform("ka"), 0.1f, 0.1f, 0.1f);
+			glUniform3f(progSkin->getUniform("ks"), 0.1f, 0.1f, 0.1f);
+			glUniform1f(progSkin->getUniform("s"), 200.0f);
+			shape->setProgram(progSkin, false);
+			shape->update(frame);
+			shape->draw(frame);
+			progSkin->unbind();
 
-		MV->popMatrix();
+			MV->popMatrix();
+		}
 	}
-	/*
-	if (!keyToggles[(unsigned int)'g'])
+	else
 	{
-	}
-	else // calculate on gpu
-	{
+		// calculate on gpu
 		for (const auto& shape : shapes) {
 			MV->pushMatrix();
 			// Draw skin
@@ -344,6 +351,7 @@ void render()
 			glUniform3f(progSkinGpu->getUniform("ks"), 0.1f, 0.1f, 0.1f);
 			glUniform1f(progSkinGpu->getUniform("s"), 200.0f);
 			shape->setProgram(progSkinGpu, true);
+			// no update, only draw
 			shape->draw(frame);
 			progSkin->unbind();
 
@@ -351,9 +359,18 @@ void render()
 		}
 
 	}
-	*/
-	
-
+	double ft = glfwGetTime();
+	framesMeasured++;
+	aggDrawTime += ft - it;
+	if (framesMeasured >= 60)
+	{
+		if (keyToggles[(unsigned int)'p'])
+		{
+			cout << "Average Draw Time using " << (keyToggles[(unsigned int)'g'] ? "CPU" : "GPU") << ": " << aggDrawTime / framesMeasured << endl;
+		}
+		framesMeasured = 0;
+		aggDrawTime = 0;
+	}
 
 	// Pop matrix stacks.
 	MV->popMatrix();

@@ -1,4 +1,5 @@
 #include "Helpers.h"
+// fetches next non-comment empty line
 std::string getNextValidLine(std::ifstream& in)
 {
 	std::string line;

@@ -28,7 +28,8 @@ public:
 	void setTextureFilename(const std::string &f) { textureFilename = f; }
 	std::string getTextureFilename() const { return textureFilename; }
 	std::shared_ptr<TextureMatrix> getTextureMatrix() { return T; }
-	void ShapeSkin::bindBones(std::shared_ptr<Bones> _bones);
+	void bindBones(std::shared_ptr<Bones> _bones);
+	void reloadVertices();
 private:
 	bool sendWeightData;
 	std::shared_ptr<Program> prog;
@@ -44,6 +45,7 @@ private:
 	GLuint posBufID;
 	GLuint norBufID;
 	GLuint texBufID;
+	GLuint weightID, bonesID, inflID;
 	std::string textureFilename;
 	std::shared_ptr<TextureMatrix> T;
 };
