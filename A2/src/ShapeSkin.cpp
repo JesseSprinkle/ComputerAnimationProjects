@@ -196,27 +196,23 @@ void ShapeSkin::update(int k)
 	for (int i = 0; i < numVerts; ++i)
 	{
 		// start with init pos and result, sum w * A * x
-		glm::vec4 initPos = glm::vec4(posBuf[i * 3], posBuf[i * 3 + 1], posBuf[i * 3 + 2], 1.0f);
-		glm::vec4 initNor = glm::vec4(norBuf[i * 3], norBuf[i * 3 + 1], norBuf[i * 3 + 2], 0.0f);
+		glm::vec4 initPos(posBuf[i * 3], posBuf[i * 3 + 1], posBuf[i * 3 + 2], 1.0f);
+		glm::vec4 initNor(norBuf[i * 3], norBuf[i * 3 + 1], norBuf[i * 3 + 2], 0.0f);
 		glm::vec4 resultPos(0);
 		glm::vec4 resultNor(0);
-		for (int j = i * maxWeights; j < (i + 1) * maxWeights; ++j)
+		for (int j = i * maxWeights; j < (i * maxWeights) + nInfluences[i]; ++j)
 		{
-			// for efficiency, if we are greater than the number of points that influence this point, stop adding 0s
-			if (j - (i * maxWeights) >= nInfluences[i])
-			{
-				break;
-			}
 			resultPos += skinningWeights[j] * (animMats->operator[](boneIndices[j]) * initPos);
 			resultNor += skinningWeights[j] * (animMats->operator[](boneIndices[j]) * initNor);
 		}
+
+		resultNor = glm::normalize(resultNor);
 		// set new position for vertex, dir for norm
-		posBuf2[i * 3] = resultPos.x;
-		posBuf2[i * 3 + 1] = resultPos.y;
-		posBuf2[i * 3 + 2] = resultPos.z;
-		norBuf2[i * 3] = resultNor.x;
-		norBuf2[i * 3 + 1] = resultNor.y;
-		norBuf2[i * 3 + 2] = resultNor.z;
+		for (int j = 0; j < 3; j++)
+		{
+			posBuf2[i * 3 + j] = resultPos[j];
+			norBuf2[i * 3 + j] = resultNor[j];
+		}
 	}
 
 	// send updated data to gpu

@@ -36,17 +36,6 @@ Bones::Bones(string filename)
 		itPose->operator[](i) = glm::inverse(tPose->operator[](i));
 	}
 
-	animationMatrices = vector<shared_ptr<vector<glm::mat4>>>(frameCount);
-	for (int i = 0; i < frameCount; ++i)
-	{
-		shared_ptr<vector<glm::mat4>> animMat = make_shared<vector<glm::mat4>>(boneCount);
-		for (int j = 0; j < boneCount; ++j)
-		{
-			animMat->operator[](j) = bones[i]->operator[](j) * itPose->operator[](j);
-		}
-		animationMatrices[i] = animMat;
-	}
-
 	in.close();
 }
 
@@ -90,5 +79,10 @@ shared_ptr<vector<glm::mat4>> Bones::getBonesAtFrame(int frame)
 
 shared_ptr<vector<glm::mat4>> Bones::getAnimationMatricesAtFrame(int frame)
 {
-	return animationMatrices[frame];
+	shared_ptr<vector<glm::mat4>> toReturn = make_shared<vector<glm::mat4>>(tPose->size());
+	for (int i = 0; i < tPose->size(); i++)
+	{
+		toReturn->operator[](i) = bones[frame]->operator[](i) * itPose->operator[](i);
+	}
+	return toReturn;
 }

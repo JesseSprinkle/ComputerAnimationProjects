@@ -12,7 +12,6 @@ private:
 	std::shared_ptr<std::vector<glm::mat4>> tPose;
 	std::shared_ptr<std::vector<glm::mat4>> itPose;
 	std::vector<std::shared_ptr<std::vector<glm::mat4>>> bones;
-	std::vector<std::shared_ptr<std::vector<glm::mat4>>> animationMatrices;
 
 
 public:
