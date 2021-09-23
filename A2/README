@@ -1,1 +1,15 @@
-The input data was downloaded from mixamo.com.
+Name: Jesse Sprinkle
+Copyright Info: The input data was downloaded from mixamo.com.
+Highest Task: All
+Bonus: GPU Skinning and (a little) more data
+
+Keybinds:
+'g' : Toggle between GPU and CPU skinning (GPU default)
+'k' : Toggle bone position/directions view
+'p' : Toggle printing active processor and average time to draw
+
+the code can do both GPU and CPU skinning, just toggle between ('g').
+you can see the printouts ('p') for each processor to see how much GPU skinning saves in processing time.
+
+the only data added is a new animation for Big Vegas.
+a new mesh wasn't added because they have different bone counts than 82, which would require editing my shader, which would mean it would no longer work with Big Vegas. this is not allowed.
