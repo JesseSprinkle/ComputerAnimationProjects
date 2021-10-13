@@ -1,0 +1,7 @@
+Jesse Sprinkle
+The input data was downloaded from facewaretech.com.
+Highest Stage: GPU Blendshapes
+
+When both weights are set to 1, it tries stretch the face in the direction of both blendshapes additively. This means that the face can get stretched larger than intended.
+
+Shader is only compatible up to 3 blendshapes.
